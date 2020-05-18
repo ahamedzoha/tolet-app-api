@@ -5,14 +5,14 @@ const express = require("express")
 const app = express()
 
 //DURING DEPLOYMENT
-// admin.initializeApp()
+admin.initializeApp()
 
 //DURING LOCAL TESTING
-const serviceAccountkey = require("../serviceAccount.json")
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccountkey),
-  databaseURL: "https://tolet-app-bd.firebaseio.com",
-})
+// const serviceAccountkey = require("../serviceAccount.json")
+// admin.initializeApp({
+//   credential: admin.credential.cert(serviceAccountkey),
+//   databaseURL: "https://tolet-app-bd.firebaseio.com",
+// })
 
 app.get("/get-rentals/", (req, res) => {
   let userID = req.query.userID
@@ -20,6 +20,7 @@ app.get("/get-rentals/", (req, res) => {
   admin
     .firestore()
     .collection(`/users/${userID}/rentals`)
+    .orderBy("createdAt", "desc")
     .get()
     .then((data) => {
       let rentals = []
@@ -46,7 +47,7 @@ app.post("/create-rental", (req, res) => {
     rent: req.body.rent,
     rooms: req.body.rooms,
     title: req.body.title,
-    createdAt: admin.firestore.Timestamp.fromDate(new Date()),
+    createdAt: new Date().toISOString(),
   }
   const userID = req.body.userID
 
