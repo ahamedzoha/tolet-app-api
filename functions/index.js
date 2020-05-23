@@ -1,5 +1,12 @@
 const functions = require("firebase-functions")
 const admin = require("firebase-admin")
+const algoliasearch = require("algoliasearch")
+
+const APP_ID = functions.config().algolia.app
+const ADMIN_KEY = functions.config().algolia.key
+
+const client = algoliasearch(APP_ID, ADMIN_KEY)
+const index = client.initIndex("rentals")
 
 const express = require("express")
 const app = express()
@@ -13,6 +20,32 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccountkey),
   databaseURL: "https://tolet-app-bd.firebaseio.com",
 })
+//ALGOLIA ADD INDEX ON FIRESTORE DOCUMENT CREATE
+exports.addToIndex = functions.firestore
+  .document("rentals/{rentalID}")
+  .onCreate((snapshot) => {
+    const data = snapshot.data()
+    const objectID = snapshot.id
+
+    return index.saveObject({ ...data, objectID })
+  })
+
+//ALGOLIA UPDATE INDEX ON FIRESTORE DOCUMENT UPDATE
+exports.updateIndex = functions.firestore
+  .document("rentals/{rentalID}")
+  .onUpdate((change) => {
+    const newData = change.after.data()
+    const objectID = change.after.id
+
+    return index.saveObject({ ...newData, objectID })
+  })
+
+//ALGOLIA DELETE INDEX ON FIRESTORE DOCUMENT DELETE
+exports.deleteIndex = functions.firestore
+  .document("rentals/{rentalID}")
+  .onDelete((snapshot) => {
+    index.deleteObject(snapshot.id)
+  })
 
 // GET ALL RENTALS (FOR SPECIFIC USER or ALL => SEE API DOCS) ORDERED BY LATEST
 app.get("/get-all-rentals/", (req, res) => {
@@ -80,6 +113,25 @@ app.post("/create-rental", (req, res) => {
       res.status(500).json({ error: "something went wrong" })
       console.log(err)
     })
+})
+
+app.post("/remove-rental", (req, res) => {
+  const removeRental = {
+    userID: req.body.userID,
+    rentalID: req.body.rentalID,
+  }
+
+  admin
+    .firestore()
+    .collection("/rentals")
+    .where("rentalID", "==", removeRental.rentalID)
+    .get()
+    .then((querySnapshot) => {
+      querySnapshot.forEach((documentSnapshot) => {
+        documentSnapshot.ref.delete()
+      })
+    })
+    .catch((err) => res.send({ error: `Error ${err}` }))
 })
 
 exports.api = functions.https.onRequest(app)
